@@ -1,85 +1,38 @@
 # CommonGrid
 
-A modular behavior-change platform that turns verified residence sustainability outcomes into seven-day team
-challenges and university-funded in-app rewards.
+CommonGrid is a modular sustainability platform for student residences. Students choose the habits they care about, opt into verified team challenges, track community impact, and redeem university-funded rewards inside the app.
 
-## Demo
+Energy reduction is the first installed habit. The platform core is intentionally independent from energy-specific ingestion, baselines, metrics, and UI so walking, water, waste, food, and transport modules can be added without changing authentication, organizations, challenge enrollment, or rewards.
+
+## Local development
+
+1. Create a Supabase project and apply the migrations in `supabase/migrations`.
+2. Copy `.env.example` to `.env` and add the project URL and publishable key.
+3. Set `BMS_INGESTION_SECRET` as an Edge Function secret.
+4. Deploy `ingest-energy`, `reward-token`, and `redeem-reward`.
+5. Run:
 
 ```bash
 npm install
-npm run web
+npm start
 ```
 
-Choose **Student demo** to experience onboarding and the idle-AC challenge. Choose **University admin** to adjust
-the target and reward pool or advance the simulated BMS feed to day 7. Return to the student wallet to reveal the
-issued voucher.
+Use `supabase/seed.sql` only for an explicit local preview environment. Production never falls back to fictional data.
 
-The demo deliberately runs without a backend so it remains reliable during judging. To connect Supabase, copy
-`.env.example`, apply the migrations in `supabase/migrations`, and use the client boundary in
-`src/lib/supabase.ts`. See `docs/architecture.md` for security boundaries and instructions for adding another
-behavior module.
+`expo-sqlite` web support requires cross-origin isolation. The local Expo server sets the required COEP and COOP headers through `metro.config.js`. Production web hosting must also return:
 
----
+```text
+Cross-Origin-Embedder-Policy: credentialless
+Cross-Origin-Opener-Policy: same-origin
+```
 
-**Hackathon:** Lifehack 2026 \
-**Track:** Sustainability \
-**Date:** 29-30 August, 2026 \
-**Team:** Segfault Survivors \
-**Members:** Harshit & Vihaan \
-
-# Welcome to your Expo app 👋
-
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
-
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Validation
 
 ```bash
-npm run reset-project
+npm test
+npm run lint
+npx tsc --noEmit
+npx expo export --platform web
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+See `docs/architecture.md` for module boundaries, security rules, ingestion, and redemption.

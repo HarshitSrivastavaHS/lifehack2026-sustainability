@@ -1,0 +1,10 @@
+project_id = "common-grid"
+
+[functions.ingest-energy]
+verify_jwt = false
+
+[functions.reward-token]
+verify_jwt = false
+
+[functions.redeem-reward]
+verify_jwt = false

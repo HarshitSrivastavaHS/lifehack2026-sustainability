@@ -1,3 +1,7 @@
+import '@/global.css';
+
+import { Platform } from 'react-native';
+
 export const Palette = {
   ink: '#102A2A',
   inkSoft: '#496261',
@@ -18,10 +22,6 @@ export const Palette = {
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
-
-import '@/global.css';
-
-import { Platform } from 'react-native';
 
 export const Colors = {
   light: {

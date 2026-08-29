@@ -1,27 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Palette } from '@/constants/theme';
-import type { ChallengeCardProps, ChallengeModule, SharedProgress } from '@/core/challenges/types';
-
-export interface IdleAcConfig {
-  targetPercent: number;
-  expectedKwh: number;
-  occupancyThreshold: number;
-}
-
-export interface EnergySample {
-  id: string;
-  actualKwh: number;
-  expectedKwh: number;
-  occupancyRatio: number;
-}
-
-export interface EnergyProgress extends SharedProgress {
-  savedKwh: number;
-  savedPercent: number;
-  expectedKwh: number;
-  actualKwh: number;
-}
+import type { ChallengeCardProps, ChallengeModule } from '@/core/challenges/types';
+import { calculateEnergyProgress, normalizeEnergySample, validateIdleAcConfig, type EnergyProgress, type EnergySample, type IdleAcConfig } from './processor';
+export type { EnergyProgress, EnergySample, IdleAcConfig } from './processor';
 
 function EnergyCard({ progress }: ChallengeCardProps<EnergyProgress>) {
   return (
@@ -55,41 +37,22 @@ export const energyModule: ChallengeModule<IdleAcConfig, EnergySample, EnergyPro
   key: 'idle-ac',
   label: 'Idle AC',
   icon: '❄',
+  description: 'Reduce cooling when shared spaces are empty.',
+  category: 'energy',
   version: 1,
-  supportedScopes: ['floor', 'residence', 'university'],
-  validateConfig: (config) => {
-    const errors: string[] = [];
-    if (config.targetPercent < 1 || config.targetPercent > 30) {
-      errors.push('Target must be between 1% and 30%.');
-    }
-    if (config.expectedKwh <= 0) errors.push('Expected energy must be positive.');
-    return errors;
-  },
-  normalizeSample: (input) => input as EnergySample,
-  calculateProgress: (config, samples) => {
-    const eligible = samples.filter((sample) => sample.occupancyRatio < config.occupancyThreshold);
-    const expectedKwh = eligible.reduce((sum, sample) => sum + sample.expectedKwh, 0);
-    const actualKwh = eligible.reduce((sum, sample) => sum + sample.actualKwh, 0);
-    const savedKwh = Math.max(0, expectedKwh - actualKwh);
-    const targetValue = expectedKwh * (config.targetPercent / 100);
-    return {
-      currentValue: savedKwh,
-      targetValue,
-      unit: 'kWh',
-      progressRatio: targetValue ? Math.min(savedKwh / targetValue, 1) : 0,
-      verified: true,
-      updatedAt: new Date().toISOString(),
-      displayMetrics: { expectedKwh, actualKwh },
-      savedKwh,
-      savedPercent: expectedKwh ? (savedKwh / expectedKwh) * 100 : 0,
-      expectedKwh,
-      actualKwh,
-    };
-  },
+  supportedScopes: ['residence', 'university'],
+  metrics: [
+    { key: 'saved_kwh', label: 'Idle cooling avoided', unit: 'kWh', color: Palette.mintDark, precision: 1 },
+    { key: 'saved_percent', label: 'Below baseline', unit: '%', color: Palette.lime, precision: 1 },
+  ],
+  validateConfig: validateIdleAcConfig,
+  normalizeSample: normalizeEnergySample,
+  calculateProgress: calculateEnergyProgress,
   calculateImpact: (progress) => ({
     co2Kg: progress.savedKwh * 0.408,
     costSaved: progress.savedKwh * 0.3,
   }),
+  buildCharts: (progress, history) => [{ key: 'energy-use', title: 'Actual against expected use', kind: 'grouped-bar', unit: 'kWh', points: history, primaryLabel: 'Actual', comparisonLabel: 'Expected', accessibilitySummary: progress.savedKwh.toFixed(1) + ' kWh of idle cooling avoided.' }],
   StudentCard: EnergyCard,
 };
 

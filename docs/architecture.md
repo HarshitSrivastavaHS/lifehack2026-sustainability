@@ -1,50 +1,37 @@
 # CommonGrid architecture
 
-CommonGrid separates its stable platform core from behavior-specific challenge modules.
+## Platform core and habit modules
 
-## Runtime modes
+The platform core owns authentication, organization membership, user habit preferences, challenge lifecycle, explicit roster enrollment, aggregate progress, notifications, rewards, and redemption.
 
-The checked-in app starts in local demo mode so the full judging flow works without credentials:
+A habit module supplies a versioned manifest, configuration validation, metric definitions, graph specifications, impact mappings, and student UI. Its server processor owns raw input validation, baseline generation, and verified calculations. Raw source tables remain module-specific. Adding a habit requires only its module, processor, registration, and data migration.
 
-1. Choose Student demo and complete university/residence onboarding with the prefilled join code.
-2. Explore the daily commitment, verified progress, league, impact, and locked wallet.
-3. Sign out and choose University admin.
-4. Advance the simulated BMS feed to day 7.
-5. Return to the student account and reveal the issued voucher.
+Energy uses an eight-week median baseline matched by weekday and 15-minute slot. Expected intervals are frozen when the challenge is published. Only readings below the configured aggregate occupancy threshold count toward verified savings.
 
-The Supabase client in `src/lib/supabase.ts` activates when both public environment variables are set. Apply
-`supabase/migrations/001_initial.sql` to a project before replacing the demo repository with Supabase queries.
-Disable **Confirm email** for the hackathon password flow; production should use university SSO or custom SMTP.
+## Runtime data flow
 
-## Challenge modules
-
-The generic contract lives in `src/core/challenges/types.ts`; installed modules are listed in
-`src/core/challenges/registry.ts`. A module owns:
-
-- validated configuration;
-- raw sample normalization;
-- verified progress and impact calculation;
-- module-specific student/admin renderers;
-- its typed database tables and ingestion adapter.
-
-The core owns organizations, memberships, challenge lifecycle, rosters, commitments, generic progress, rewards,
-wallets, and audit events. Adding walking therefore does not change energy tables or reward/auth logic.
-
-## Adding a walking module
-
-1. Add `src/features/challenges/walking/module.tsx` implementing `ChallengeModule`.
-2. Add a walking migration for device connections and step/distance samples.
-3. Register the module in the client registry and `challenge_modules`.
-4. Add an Edge Function that validates provider samples and writes progress snapshots.
-
-Expo SDK 57's basic pedometer does not receive background updates, so a production walking module should use
-Health Connect on Android and HealthKit on iOS rather than silently claiming complete passive tracking.
+1. Supabase Auth restores the session from Expo SQLite-backed storage.
+2. Database memberships determine the role; a role is never selected by the client.
+3. Students choose enabled habits and explicitly join open challenges before roster lock.
+4. A secret-authenticated Edge Function idempotently ingests BMS intervals.
+5. Server functions write privacy-safe progress and graph points.
+6. A scheduled job finalizes ended challenges and allocates rewards transactionally.
+7. Students request a 90-second QR token; an authorized redeemer scans it and the database atomically records one redemption.
 
 ## Security boundaries
 
-- Only aggregate progress is student-readable.
-- Raw meter/occupancy samples and unassigned voucher codes are never exposed through public tables.
-- Organization roles come from database memberships, never client-provided profile fields.
-- Join codes are hashed and redeemed atomically.
-- Challenge finalization and reward allocation are server-side and idempotent.
-- Service-role and ingestion secrets must never use an `EXPO_PUBLIC_` variable.
+- Public clients receive only a publishable key.
+- BMS, service-role, and ingestion secrets are Edge Function secrets.
+- Raw readings, join-code hashes, unused voucher inventory, and redemption-token hashes are not client-readable.
+- RLS and security-definer functions derive access from authenticated memberships.
+- Team rankings require at least five verified members.
+- Reward capacity is reserved before publication; allocation and finalization are idempotent.
+- QR redemption requires connectivity and rejects expiry, replay, unauthorized redeemers, and already-used inventory.
+
+## Adding another habit
+
+1. Implement the client `ChallengeModule` and pure `HabitProcessor`.
+2. Add its raw-data migration and secure ingestion adapter.
+3. Register the module in the client registry and `challenge_modules`.
+4. Add processor tests for validation, baseline behavior, progress, impact, and edge cases.
+5. Reuse the core preference, enrollment, graph, reward, wallet, and redemption flows.

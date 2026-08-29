@@ -33,6 +33,8 @@
           "imageWidth": 76
         }
       ],
+      ["expo-camera", {"cameraPermission": "Allow CommonGrid to scan reward codes", "recordAudioAndroid": false, "barcodeScannerEnabled": true}],
+      "expo-document-picker",
       "expo-sqlite"
     ],
     "experiments": {
