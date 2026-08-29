@@ -1,0 +1,9 @@
+{
+  "name": "Expo Development",
+  "dockerComposeFile": "../compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "forwardPorts": [8081],
+  "remoteUser": "node"
+}
