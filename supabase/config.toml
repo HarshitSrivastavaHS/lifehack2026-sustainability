@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.redeem-reward]
 verify_jwt = false
+
+[functions.manage-student]
+verify_jwt = false

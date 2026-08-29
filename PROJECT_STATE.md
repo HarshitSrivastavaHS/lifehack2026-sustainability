@@ -2,70 +2,66 @@
 
 ## Current objective
 
-Turn CommonGrid from an Expo demo into a production-oriented, Supabase-backed sustainability platform for student residences while preserving the current visual design. Energy reduction is the first habit, not a one-off architecture.
+Deliver a very small hackathon MVP for one university: student electricity savings award points, advance a shared university milestone, unlock rewards, and allow one redemption per student.
 
-## Architecture and design decisions
+## Architecture and important decisions
 
-- Expo SDK 57 / React Native 0.86 / React 19.2 with Expo Router and strict TypeScript.
-- Supabase provides authentication, PostgreSQL/RLS, realtime updates, Edge Functions, organization membership, challenge data, and rewards.
-- `src/core/challenges/` defines generic module/processor contracts and a registry. Habit-specific client and calculation code stays in `src/features/challenges/<habit>/`; raw data and ingestion remain module-specific.
-- The platform core owns roles, organizations, habit preferences, enrollment, progress, leagues, rewards, wallet, and redemption.
-- Roles come from database memberships, never client selection. Raw energy readings and secrets are not client-readable.
-- Energy verification uses occupancy filtering and a median baseline. Rewards are inventory-backed, allocated transactionally, and redeemed in-app with short-lived QR tokens.
+- Expo SDK 57 / React Native 0.86 / React 19.2 with one Expo Router entry route.
+- Supabase Auth persists sessions through platform-specific storage. `profiles.app_role` exposes only `student` and `admin`; Dr. Elena Brooks is the sole active admin.
+- The client uses focused JSON read models and security-definer mutations from migration `024_hackathon_mvp.sql`.
+- Electricity records are immutable. The backend calculates `1 kWh = 10 points`, updates aggregate progress, and unlocks reached rewards atomically and idempotently.
+- The `manage-student` Edge Function creates/edits Auth users after verifying the active admin. Public signup is absent and new external signups remain inactive.
+- Legacy organization, challenge, analytics, inventory, and QR database infrastructure remains for migration safety but is not queried or exposed.
 
 ## User requirements and constraints
 
-- Support many optional sustainability habits with low coupling; users choose which habits they want.
-- Keep screens uncluttered, use graphs where useful, and retain the current look.
-- Universities/admins configure challenges, reward inventory, and allocation in advance; students redeem rewards inside the app.
-- Build real behavior, not demo-only/fictitious fallbacks. Do not display internal instructions or user prohibitions in the app.
-- Before coding, read the exact Expo 57 docs and inspect the existing diff. Never commit secrets.
+- One university, students, and one admin only.
+- No residences, floors, groups, missions, challenges, XP, levels, streaks, achievements, leaderboards, other environmental metrics, QR codes, or complex analytics.
+- Student: personal kWh/points, university progress, rewards, redemption, and history.
+- Admin: dashboard, student account management, electricity simulation, and reward management.
+- Every visible action must work against Supabase and survive refresh/re-login.
 
 ## Files created or modified
 
-- App/config: `package.json`, `package-lock.json`, `app.json`, `tsconfig.json`, `metro.config.js`, `eslint.config.js`, `.gitignore`.
-- Client: `src/app/`, `src/constants/theme.ts`, `src/components/ui/`, `src/core/challenges/`, `src/features/{auth,onboarding,student,admin,challenges}/`, `src/state/app-context.tsx`, and `src/lib/supabase.ts`.
-- Backend: `supabase/config.toml`, `.env.example`, migrations `001`–`008`, `seed.sql`, and Edge Functions for energy ingestion, reward tokens, and redemption.
-- Documentation: `README.md`, `docs/architecture.md`, and `AGENTS.md`.
-- The starter demo components, hooks, tabs, and `src/state/demo-context.tsx` are deleted in the working tree.
+- MVP client: `src/app/index.tsx`, `src/state/app-context.tsx`, student/admin/auth screens, shared UI/theme, and `src/core/mvp/` rules/tests.
+- Backend: migrations `024`–`026`, `supabase/functions/manage-student/`, and function configuration.
+- Removed obsolete client feature modules and QR/camera/document dependencies/plugins.
+- Updated `README.md` and `docs/architecture.md` for the active MVP.
 
 ## Features completed
 
-- Supabase session persistence, signup/sign-in, DB-derived roles, onboarding, join codes, and organization membership.
-- Habit preference loading/toggling and modular challenge registry.
-- Student/admin shells, challenge enrollment and commitments, progress charts, league/impact views, reward wallet, QR token generation/redemption, and realtime refresh.
-- Energy config/sample validation, progress/impact calculation, processor tests, secure idempotent ingestion, and scheduled baseline/finalization database jobs.
-- Database schema/RLS for modular challenges, organization scope, reward planning/inventory, allocation, and redemption.
-- Expo SQLite web WASM bundling and local COEP/COOP development headers through Metro.
+- Sign-in-only role routing with no onboarding/university selection.
+- Polished responsive student home with personal impact, 920/1,000 shared progress, reward states, redemption, and history.
+- Four-section responsive admin console with functional student CRUD/deactivation, simulation, milestone rewards, and summary metrics.
+- Secure persistent electricity calculation, university aggregation, automatic unlocks, duplicate protection, and redemption history.
+- Twelve active demo students and four rewards; Alice starts at 12 kWh/120 points and the university at 92 kWh/920 points.
+- Hosted Supabase migrations `001`–`026` are synchronized and `manage-student` is deployed.
 
-## Features still pending
+## Still pending
 
-- Validate all migrations and Edge Functions against a fresh local/hosted Supabase project.
-- Complete end-to-end testing for student, admin, and redeemer roles with real accounts and data.
-- Verify camera-based QR redemption on physical iOS/Android devices and responsive/accessibility behavior.
-- Add the next habit module to prove the extension contract; energy is the only registered client module.
-- Add broader tests for context/data mapping, UI flows, RLS, RPC concurrency, ingestion retries, and reward replay/expiry.
+- No requested MVP work remains. Physical-device visual checking is optional; the responsive web/Expo build is valid.
 
 ## Known bugs and failed approaches
 
-- No confirmed build or unit-test failures. Backend and device flows have not yet been integration-tested.
-- `app-context.tsx` still exposes energy-shaped progress (`EnergyProgress`) at the shared context boundary, which is residual coupling to remove before multiple simultaneous habit dashboards.
-- The repository has extensive uncommitted work; preserve it and do not reset or restore deleted starter files.
-- A CI-mode Expo development request emitted `Worker chunk not found` from the SDK 57 Metro serializer after successfully resolving SQLite WASM; static web export succeeds. Recheck in the normal interactive development environment before treating it as an application regression.
+- No confirmed application, schema, or demo-flow bug remains.
+- Local React Native DevTools cannot launch because the container lacks `libnspr4`; Metro and the app still run normally.
+- The first hosted acceptance command used a copied student UUID and was rejected before mutation; rerunning with the Supabase Auth user ID passed.
 
-## Commands and current validation status
-
-Run with `npm install`, then `npm start` or `npm run web|ios|android`. Backend setup is documented in `README.md`; container web setup uses `docker compose up --build`.
+## Commands and validation status
 
 Validated on 2026-08-29:
 
-- `npm test` — pass: 1 file, 4 tests.
+- `npm test` — pass, 3 MVP rule tests.
 - `npm run lint` — pass.
 - `npx tsc --noEmit` — pass.
-- `npx expo export --platform web` — pass; static output written to `dist/`.
-- Metro config inspection — pass: `.wasm` is registered as an asset and development middleware is installed.
-- Local HTTP header inspection — COEP `credentialless` and COOP `same-origin` are present (the CI-mode request itself returned the worker-chunk serializer error noted above).
+- `npx expo export --platform web` — pass.
+- Expo web/Metro smoke test — HTTP 200, no bundle/runtime compile error.
+- `npx supabase db lint --linked` — pass, no schema errors.
+- `npx supabase migration list --linked` — local/remote parity through `026`.
+- Hosted acceptance — Alice 12/120 and university 920/1,000; admin adds 8 kWh; backend awards 80 points; 3 Free Washes unlocks; Alice redeems; sign-out/sign-in preserves history. Demo then restored to 920.
+- Hosted security checks — role escalation, raw electricity writes, unauthenticated function calls, and duplicate redemption rejected.
+- Hosted admin CRUD — student create/edit/deactivate and reward create/edit/deactivate passed; QA records removed afterward.
 
 ## Exact next recommended action
 
-Start a fresh local Supabase instance, apply migrations `001`–`008` in order, load `supabase/seed.sql` only for local preview, serve the three Edge Functions with required secrets, and execute one complete admin-create → student-opt-in/join → energy-ingest → finalize/allocate → reveal → QR-redeem flow. Record every failure as a focused test before changing architecture or UI.
+Start the app and use the seeded admin/student accounts to present the required 920 → 1,000 point hackathon demo.

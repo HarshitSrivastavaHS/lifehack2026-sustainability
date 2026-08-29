@@ -167,8 +167,10 @@ create or replace function public.get_challenge_league(target_challenge uuid)
 returns table (scope_id uuid, scope_label text, score numeric, participant_count bigint, commitment_count bigint)
 language sql security definer set search_path = public
 as $$
-  select ps.scope_id, f.name, coalesce((ps.display_metrics ->> 'saved_percent')::numeric, 0),
-    count(distinct cr.user_id), count(distinct dc.user_id)
+  select ps.scope_id as scope_id, f.name as scope_label,
+    coalesce((ps.display_metrics ->> 'saved_percent')::numeric, 0) as score,
+    count(distinct cr.user_id) as participant_count,
+    count(distinct dc.user_id) as commitment_count
   from public.progress_snapshots ps
   join public.floors f on f.id = ps.scope_id
   join public.challenge_rosters cr on cr.challenge_id = ps.challenge_id and cr.floor_id = ps.scope_id
@@ -181,6 +183,8 @@ as $$
   order by score desc
 $$;
 grant execute on function public.get_challenge_league(uuid) to authenticated;
+
+drop function public.get_my_wallet();
 
 create or replace function public.get_my_wallet()
 returns table (

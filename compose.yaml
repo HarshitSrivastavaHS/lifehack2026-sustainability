@@ -9,8 +9,7 @@ services:
       - .:/workspace
       - node_modules:/workspace/node_modules
 
-    ports:
-      - "8081:8081"
+    network_mode: host
 
     stdin_open: true
     tty: true

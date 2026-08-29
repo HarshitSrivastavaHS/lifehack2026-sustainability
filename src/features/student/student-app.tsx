@@ -1,96 +1,197 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Brand, Button, Card, Eyebrow, Pill, ProgressBar, Stat, type } from '@/components/ui/app-ui';
-import { MetricChart } from '@/components/ui/metric-chart';
+import { Brand, Button, Card, EmptyState, Eyebrow, Pill, ProgressBar, SectionHeader } from '@/components/ui/app-ui';
 import { Palette } from '@/constants/theme';
-import { getChallengeModule } from '@/core/challenges/registry';
-import { useApp, type StudentTab } from '@/state/app-context';
-
-const tabs: { key: StudentTab; label: string; icon: string }[] = [
-  { key: 'home', label: 'Home', icon: '⌂' }, { key: 'challenges', label: 'Challenges', icon: '◎' },
-  { key: 'league', label: 'League', icon: '♜' }, { key: 'impact', label: 'Impact', icon: '♣' }, { key: 'wallet', label: 'Wallet', icon: '▣' },
-];
+import { rewardProgress } from '@/core/mvp/rules';
+import { type MvpReward, useApp } from '@/state/app-context';
 
 export function StudentApp() {
-  const { studentTab, setStudentTab, logout, displayName, habits, setHabitEnabled } = useApp();
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const insets = useSafeAreaInsets();
-  return <SafeAreaView style={styles.safe} edges={['top']}>
-    <View style={styles.header}><Brand /><View style={styles.headerRight}><Pressable accessibilityLabel="Habit preferences" onPress={() => setPreferencesOpen(true)} style={styles.avatar}><Text style={styles.avatarText}>{displayName.slice(0, 1).toUpperCase()}</Text></Pressable></View></View>
-    <View style={styles.content}>{studentTab === 'home' ? <Home /> : studentTab === 'challenges' ? <Challenges /> : studentTab === 'league' ? <League /> : studentTab === 'impact' ? <Impact /> : <Wallet />}</View>
-    <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>{tabs.map((tab) => { const active = tab.key === studentTab; return <Pressable key={tab.key} onPress={() => setStudentTab(tab.key)} style={styles.tab}><View style={[styles.tabIconWrap, active && styles.tabIconActive]}><Text style={[styles.tabIcon, active && styles.tabIconTextActive]}>{tab.icon}</Text></View><Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text></Pressable>; })}</View>
-    <Modal visible={preferencesOpen} transparent animationType="fade" onRequestClose={() => setPreferencesOpen(false)}><View style={styles.backdrop}><Card style={styles.modal}><Eyebrow>YOUR HABITS</Eyebrow><Text style={type.title}>Keep it focused.</Text><Text style={type.body}>Choose what appears on Home and sends notifications.</Text>{habits.map((habit) => <Pressable key={habit.key} onPress={() => setHabitEnabled(habit.key, !habit.enabled)} style={styles.preference}><Text style={styles.habitIcon}>{habit.icon}</Text><View style={styles.grow}><Text style={styles.itemTitle}>{habit.label}</Text><Text style={type.small}>{habit.description}</Text></View><Pill tone={habit.enabled ? 'mint' : 'cream'}>{habit.enabled ? 'ON' : 'OFF'}</Pill></Pressable>)}<Button onPress={() => setPreferencesOpen(false)}>Done</Button><Button variant="ghost" onPress={logout}>Sign out</Button></Card></View></Modal>
-  </SafeAreaView>;
+  const { profile, studentHome, loading, error, logout, refresh, redeemReward } = useApp();
+  const [redeeming, setRedeeming] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const { width } = useWindowDimensions();
+
+  if (!studentHome) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <Text style={styles.loadingTitle}>{loading ? 'Loading your impact…' : 'Your impact is unavailable'}</Text>
+          {error && <Text style={styles.errorText}>{error}</Text>}
+          {!loading && <Button onPress={refresh} variant="secondary">Try again</Button>}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const progress = rewardProgress(studentHome.universityPoints, studentHome.nextReward?.pointsRequired ?? null);
+  const unlocked = studentHome.rewards.filter((reward) => reward.state === 'unlocked');
+  const locked = studentHome.rewards.filter((reward) => reward.state === 'locked');
+  const redeemed = studentHome.rewards.filter((reward) => reward.state === 'redeemed');
+
+  const redeem = async (reward: MvpReward) => {
+    setRedeeming(reward.id);
+    setNotice(null);
+    const result = await redeemReward(reward.id);
+    setRedeeming(null);
+    setNotice(result.error ? { tone: 'error', text: result.error } : { tone: 'success', text: `${reward.name} redeemed.` });
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView
+        contentContainerStyle={styles.page}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Palette.mintDark} />}>
+        <View style={styles.header}>
+          <Brand />
+          <View style={styles.headerRight}>
+            {width >= 540 && <View style={styles.nameBlock}><Text style={styles.hello}>Hi, {profile?.name.split(' ')[0]}</Text><Text style={styles.university}>{studentHome.universityName}</Text></View>}
+            <Button onPress={logout} variant="ghost" style={styles.signOut}>Sign out</Button>
+          </View>
+        </View>
+
+        {notice && <View style={[styles.notice, notice.tone === 'error' && styles.noticeError]}><Text style={styles.noticeText}>{notice.text}</Text></View>}
+        {error && <View style={[styles.notice, styles.noticeError]}><Text style={styles.noticeText}>{error}</Text></View>}
+
+        <View style={styles.heroGrid}>
+          <Card style={styles.personalCard}>
+            <Eyebrow>YOUR IMPACT</Eyebrow>
+            <View style={styles.personalMain}>
+              <View><Text style={styles.bigNumber}>{formatNumber(studentHome.personalKwh)}</Text><Text style={styles.bigUnit}>kWh saved</Text></View>
+              <View style={styles.divider} />
+              <View><Text style={styles.bigNumber}>{studentHome.personalPoints.toLocaleString()}</Text><Text style={styles.bigUnit}>points earned</Text></View>
+            </View>
+            <Text style={styles.contribution}>Every kilowatt-hour moves the whole university forward.</Text>
+          </Card>
+
+          <Card style={styles.universityCard}>
+            <View style={styles.universityTop}>
+              <View><Eyebrow style={styles.mintEyebrow}>UNIVERSITY IMPACT</Eyebrow><Text style={styles.universityKwh}>{formatNumber(studentHome.universityKwh)} kWh saved together</Text></View>
+              <View style={styles.percentBadge}><Text style={styles.percent}>{progress.percentage}%</Text></View>
+            </View>
+            {studentHome.nextReward ? <>
+              <View style={styles.pointsRow}><Text style={styles.pointsCurrent}>{studentHome.universityPoints.toLocaleString()}</Text><Text style={styles.pointsTarget}> / {studentHome.nextReward.pointsRequired.toLocaleString()} points</Text></View>
+              <ProgressBar value={progress.ratio} color={Palette.lime} height={14} />
+              <View style={styles.milestoneRow}>
+                <View><Text style={styles.nextLabel}>NEXT REWARD</Text><Text style={styles.nextReward}>{studentHome.nextReward.name}</Text></View>
+                <Text style={styles.remaining}>{progress.remaining.toLocaleString()} points to go</Text>
+              </View>
+            </> : <View style={styles.allUnlocked}><Text style={styles.allUnlockedTitle}>All rewards unlocked</Text><Text style={styles.darkMuted}>The university reached every active milestone.</Text></View>}
+          </Card>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="Rewards" subtitle="Unlocked for every active student when the university reaches each milestone." />
+          {unlocked.length > 0 && <RewardGroup title="READY TO REDEEM" rewards={unlocked} onRedeem={redeem} redeeming={redeeming} />}
+          {locked.length > 0 && <RewardGroup title="UPCOMING" rewards={locked} />}
+          {redeemed.length > 0 && <RewardGroup title="REDEEMED" rewards={redeemed} />}
+          {studentHome.rewards.length === 0 && <EmptyState icon="↯" title="No rewards yet" body="University rewards will appear here." />}
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="Redemption history" />
+          <Card style={styles.historyCard}>
+            {studentHome.redemptions.length === 0 ? <Text style={styles.historyEmpty}>Redeemed rewards will appear here.</Text> : studentHome.redemptions.map((item, index) => (
+              <View key={item.id} style={[styles.historyRow, index < studentHome.redemptions.length - 1 && styles.historyBorder]}>
+                <View style={styles.historyIcon}><Text style={styles.check}>✓</Text></View>
+                <View style={styles.historyCopy}><Text style={styles.historyName}>{item.rewardName}</Text><Text style={styles.historyDate}>{formatDate(item.redeemedAt)}</Text></View>
+                <Pill tone="mint">Redeemed</Pill>
+              </View>
+            ))}
+          </Card>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
-function Screen({ children }: { children: React.ReactNode }) { return <ScrollView style={styles.scroll} contentContainerStyle={styles.screen} showsVerticalScrollIndicator={false}>{children}</ScrollView>; }
-function Intro({ eyebrow, title, body }: { eyebrow: string; title: string; body?: string }) { return <View style={styles.intro}><Eyebrow>{eyebrow}</Eyebrow><Text style={type.title}>{title}</Text>{body && <Text style={type.body}>{body}</Text>}</View>; }
-
-function Home() {
-  const { displayName, membership, activeChallenge, progress, checkedToday, checkIn, participation, rewardItems, setStudentTab } = useApp();
-  if (!activeChallenge) return <Screen><View style={styles.welcome}><View><Text style={styles.greeting}>Welcome, {displayName}</Text><Text style={styles.location}>{membership?.residenceName} · {membership?.floorName}</Text></View></View><Empty title="Choose your next challenge" body="Challenges matching your habits will appear here after you join." action={() => setStudentTab('challenges')} /></Screen>;
-  const module = getChallengeModule(activeChallenge.moduleKey); const ModuleCard = module.StudentCard as any;
-  const remaining = Math.max(progress.targetValue - progress.currentValue, 0);
-  return <Screen>
-    <View style={styles.welcome}><View><Text style={styles.greeting}>Welcome, {displayName}</Text><Text style={styles.location}>{membership?.residenceName} · {membership?.floorName}</Text></View><Pill tone="cream">Day {activeChallenge.day} of {activeChallenge.totalDays}</Pill></View>
-    <Card style={styles.hero}><View style={styles.challengeHead}><View style={styles.challengeIcon}><Text style={styles.habitIcon}>{module.icon}</Text></View><View style={styles.grow}><Eyebrow>LIVE COMMUNITY CHALLENGE</Eyebrow><Text style={styles.challengeTitle}>{activeChallenge.title}</Text><Text style={type.small}>{activeChallenge.subtitle}</Text></View></View>
-      <View style={styles.dayPath}>{Array.from({ length: activeChallenge.totalDays }, (_, index) => { const day = index + 1; const complete = day < activeChallenge.day; const current = day === activeChallenge.day; return <View key={day} style={styles.dayColumn}><View style={[styles.dayNode, complete && styles.dayDone, current && styles.dayCurrent]}><Text style={[styles.dayText, complete && styles.dayTextDone]}>{complete ? '✓' : day}</Text></View><Text style={styles.dayLabel}>D{day}</Text></View>; })}</View>
-      <View style={styles.commitment}><View style={styles.commitIcon}><Text style={styles.commitIconText}>{checkedToday ? '✓' : '↗'}</Text></View><View style={styles.grow}><Text style={styles.commitTitle}>{checkedToday ? 'Commitment logged!' : 'One small action today'}</Text><Text style={styles.commitBody}>{checkedToday ? 'Your team can see one more person showed up.' : activeChallenge.subtitle}</Text></View><Button onPress={checkIn} disabled={checkedToday} variant={checkedToday ? 'secondary' : 'dark'}>{checkedToday ? 'Done' : 'I did it'}</Button></View>
-      <View style={styles.participation}><View style={styles.between}><Text style={styles.strong}>{participation.checked} / {participation.total}</Text><Text style={type.small}>team members checked in</Text></View><ProgressBar value={participation.total ? participation.checked / participation.total : 0} color={Palette.coral} height={8} /></View>
+function RewardGroup({ title, rewards, onRedeem, redeeming }: {
+  title: string;
+  rewards: MvpReward[];
+  onRedeem?: (reward: MvpReward) => void;
+  redeeming?: string | null;
+}) {
+  return <View style={styles.rewardGroup}><Text style={styles.groupLabel}>{title}</Text><View style={styles.rewardGrid}>{rewards.map((reward) => (
+    <Card key={reward.id} style={[styles.rewardCard, reward.state === 'locked' && styles.lockedCard]}>
+      <View style={[styles.rewardIcon, reward.state === 'locked' && styles.lockedIcon]}><Text style={styles.rewardIconText}>{reward.state === 'locked' ? '◇' : '✦'}</Text></View>
+      <View style={styles.rewardCopy}>
+        <Text style={styles.rewardName}>{reward.name}</Text>
+        <Text style={styles.rewardDescription}>{reward.description}</Text>
+        <Text style={styles.rewardThreshold}>{reward.pointsRequired.toLocaleString()} university points</Text>
+      </View>
+      {reward.state === 'unlocked' && onRedeem ? <Button onPress={() => onRedeem(reward)} disabled={redeeming === reward.id} style={styles.redeemButton}>{redeeming === reward.id ? 'Redeeming…' : 'Redeem'}</Button> : <Pill tone={reward.state === 'redeemed' ? 'mint' : 'cream'}>{reward.state === 'redeemed' ? 'Redeemed ✓' : 'Locked'}</Pill>}
     </Card>
-    <View style={styles.between}><View><Text style={type.section}>Verified progress</Text><Text style={type.small}>Updated from the trusted data source</Text></View>{progress.verified && <Pill>VERIFIED</Pill>}</View>
-    <ModuleCard progress={progress} />
-    {rewardItems.length > 0 && <Card><View style={styles.rewardHead}><View style={styles.rewardIcon}><Text>✦</Text></View><View style={styles.grow}><Eyebrow>GUARANTEED REWARD POOL</Eyebrow><Text style={styles.itemTitle}>{remaining.toFixed(1)} {progress.unit} left to unlock</Text></View><Pressable onPress={() => setStudentTab('wallet')}><Text style={styles.link}>See prizes</Text></Pressable></View><ProgressBar value={progress.progressRatio} color={Palette.amber} height={13} /></Card>}
-  </Screen>;
+  ))}</View></View>;
 }
 
-function Challenges() {
-  const { challenges, habits, joinChallenge, setHabitEnabled } = useApp();
-  const enabled = new Set(habits.filter((habit) => habit.enabled).map((habit) => habit.key));
-  const relevant = challenges.filter((challenge) => enabled.has(challenge.moduleKey));
-  const hidden = habits.filter((habit) => !habit.enabled);
-  return <Screen><Intro eyebrow="YOUR JOURNEY" title="Challenges" body="Join only the habits and challenges that fit you." />
-    {relevant.length === 0 && <Card><Text style={type.section}>Nothing waiting right now</Text><Text style={type.body}>New challenges matching your habits will appear here.</Text></Card>}
-    {relevant.map((challenge) => { const module = getChallengeModule(challenge.moduleKey); return <Card key={challenge.id} style={styles.listCard}><View style={styles.listIcon}><Text style={styles.habitIcon}>{module.icon}</Text></View><View style={styles.grow}><View style={styles.titleRow}><Text style={styles.itemTitle}>{challenge.title}</Text><Pill tone={challenge.status === 'active' ? 'lime' : 'cream'}>{challenge.status.toUpperCase()}</Pill></View><Text style={type.small}>{module.label} · {challenge.scope}</Text><Text style={styles.description}>{challenge.subtitle}</Text></View>{challenge.joined ? <Pill>JOINED</Pill> : <Button onPress={() => joinChallenge(challenge.id)}>Join</Button>}</Card>; })}
-    {hidden.length > 0 && <><Text style={type.section}>Explore habits</Text>{hidden.map((habit) => <Card key={habit.key} style={styles.listCard}><View style={styles.listIcon}><Text style={styles.habitIcon}>{habit.icon}</Text></View><View style={styles.grow}><Text style={styles.itemTitle}>{habit.label}</Text><Text style={type.small}>{habit.description}</Text></View><Button variant="secondary" onPress={() => setHabitEnabled(habit.key, true)}>Show</Button></Card>)}</>}
-  </Screen>;
+function formatNumber(value: number) {
+  return value.toLocaleString(undefined, { minimumFractionDigits: value % 1 ? 1 : 0, maximumFractionDigits: 2 });
 }
 
-function League() {
-  const { league, membership } = useApp();
-  return <Screen><Intro eyebrow="FRIENDLY RIVALRY" title={(membership?.residenceName ?? 'Community') + ' League'} body="Teams are ranked against their own verified baseline." />{league.length ? <Card>{league.map((row, index) => <View key={row.scopeId} style={[styles.leagueRow, row.label === membership?.floorName && styles.highlight]}><Text style={styles.rank}>{index + 1}</Text><View style={[styles.teamIcon, { backgroundColor: [Palette.amber, Palette.lime, Palette.blue, '#E8DDF7'][index % 4] }]}><Text style={styles.strong}>{row.label.slice(0, 2)}</Text></View><View style={styles.grow}><Text style={styles.itemTitle}>{row.label}</Text><Text style={type.small}>{row.commitments} of {row.participants} checked in</Text></View><Text style={styles.score}>{row.score.toFixed(1)}%</Text></View>)}</Card> : <Card><Text style={type.body}>Rankings appear when enough teams meet the privacy threshold.</Text></Card>}<Text style={type.small}>Only eligible team aggregates are ranked. Individual consumption is never shown.</Text></Screen>;
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
-
-function Impact() {
-  const { activeChallenge, chartPoints, progress } = useApp();
-  if (!activeChallenge) return <Screen><Intro eyebrow="WHAT CHANGED" title="Your community’s impact" /><Card><Text style={type.body}>Impact appears after you join a challenge.</Text></Card></Screen>;
-  const module = getChallengeModule(activeChallenge.moduleKey); const impact = (module as any).calculateImpact(progress); const charts = (module as any).buildCharts(progress, chartPoints);
-  return <Screen><Intro eyebrow="WHAT CHANGED" title="Your community’s impact" body="Verified against the challenge baseline." /><Card><View style={styles.stats}><Stat value={progress.currentValue.toFixed(1)} label={progress.unit + ' verified progress'} accent={Palette.mintDark} /><Stat value={'$' + impact.costSaved.toFixed(2)} label="estimated savings" /><Stat value={impact.co2Kg.toFixed(1)} label="kg CO₂e avoided" /></View>{charts.map((chart: any) => <MetricChart key={chart.key} spec={chart} />)}</Card></Screen>;
-}
-
-function Wallet() {
-  const { wallet, rewardItems, revealReward, createRedemptionToken } = useApp();
-  const [token, setToken] = useState<string | null>(null);
-  return <Screen><Intro eyebrow="YOUR REWARDS" title="Wallet" body="Reveal and redeem rewards directly in CommonGrid." />
-    {wallet.length === 0 && <Empty title="No rewards yet" body="Rewards appear here automatically when your team completes a challenge." />}
-    {wallet.map((item) => <Card key={item.issuanceId} style={[styles.voucher, { backgroundColor: item.color }]}><View style={styles.between}><View><Eyebrow>{item.redeemedAt ? 'REDEEMED' : 'YOU UNLOCKED'}</Eyebrow><Text style={styles.voucherTitle}>{item.revealedAt ? item.title : 'Reward ready'}</Text><Text style={type.small}>{item.revealedAt ? item.detail : 'Reveal to see what you unlocked.'}</Text></View><Text style={styles.voucherValue}>{item.revealedAt ? item.value : '?'}</Text></View>{!item.revealedAt ? <Button onPress={() => revealReward(item.issuanceId)}>Reveal reward</Button> : !item.redeemedAt && <Button variant="dark" onPress={async () => setToken(await createRedemptionToken(item.issuanceId))}>Redeem in person</Button>}<Text style={type.small}>{item.challengeTitle}{item.expiresAt ? ' · Valid until ' + new Date(item.expiresAt).toLocaleDateString() : ''}</Text></Card>)}
-    {rewardItems.length > 0 && <><Text style={type.section}>Possible prizes</Text><Card>{rewardItems.map((item) => <View key={item.id} style={styles.prizeRow}><View style={[styles.prizeIcon, { backgroundColor: item.color }]}><Text style={styles.strong}>{item.value}</Text></View><View style={styles.grow}><Text style={styles.itemTitle}>{item.title}</Text><Text style={type.small}>{item.detail}</Text></View><Text style={styles.strong}>{item.weight}%</Text></View>)}</Card></>}
-    <Modal visible={Boolean(token)} transparent animationType="fade" onRequestClose={() => setToken(null)}><View style={styles.backdrop}><Card style={styles.modal}><Eyebrow>READY TO REDEEM</Eyebrow><Text style={type.title}>Show this at the counter.</Text>{token && <View style={styles.qr}><QRCode value={token} size={220} color={Palette.ink} backgroundColor={Palette.paper} /></View>}<Text style={type.small}>This code expires shortly and can only be used once.</Text><Button variant="secondary" onPress={() => setToken(null)}>Close</Button></Card></View></Modal>
-  </Screen>;
-}
-
-function Empty({ title, body, action }: { title: string; body: string; action?: () => void }) { return <Card style={styles.empty}><View style={styles.emptyIcon}><Text style={styles.habitIcon}>◎</Text></View><Text style={type.section}>{title}</Text><Text style={type.body}>{body}</Text>{action && <Button onPress={action}>Browse challenges</Button>}</Card>; }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Palette.cream }, content: { flex: 1 }, scroll: { flex: 1 }, header: { height: 66, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: Palette.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerRight: { flexDirection: 'row', gap: 10 }, iconButton: { width: 38, height: 38, borderRadius: 13, borderWidth: 1, borderColor: Palette.line, alignItems: 'center', justifyContent: 'center' }, iconText: { color: Palette.ink, fontSize: 18 }, avatar: { width: 38, height: 38, borderRadius: 13, backgroundColor: Palette.ink, alignItems: 'center', justifyContent: 'center' }, avatarText: { color: Palette.lime, fontWeight: '900' },
-  screen: { width: '100%', maxWidth: 760, alignSelf: 'center', padding: 18, paddingBottom: 38, gap: 16 }, intro: { gap: 8, marginVertical: 12 }, welcome: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, greeting: { color: Palette.ink, fontSize: 20, fontWeight: '900' }, location: { color: Palette.inkSoft, fontSize: 12, marginTop: 4 }, grow: { flex: 1 }, between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, strong: { color: Palette.ink, fontWeight: '900' },
-  hero: { padding: 18 }, challengeHead: { flexDirection: 'row', gap: 13, alignItems: 'center' }, challengeIcon: { width: 50, height: 50, borderRadius: 17, backgroundColor: Palette.blue, alignItems: 'center', justifyContent: 'center' }, habitIcon: { fontSize: 24 }, challengeTitle: { color: Palette.ink, fontSize: 20, fontWeight: '900', marginVertical: 3 }, dayPath: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 24 }, dayColumn: { alignItems: 'center', gap: 5 }, dayNode: { width: 35, height: 35, borderRadius: 18, backgroundColor: '#EEF1ED', alignItems: 'center', justifyContent: 'center' }, dayDone: { backgroundColor: Palette.mintDark }, dayCurrent: { backgroundColor: Palette.lime }, dayText: { color: Palette.inkSoft, fontWeight: '900' }, dayTextDone: { color: Palette.paper }, dayLabel: { color: Palette.inkSoft, fontSize: 9 },
-  commitment: { backgroundColor: Palette.ink, borderRadius: 19, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, commitIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: Palette.lime, alignItems: 'center', justifyContent: 'center' }, commitIconText: { color: Palette.ink, fontWeight: '900' }, commitTitle: { color: Palette.paper, fontSize: 13, fontWeight: '900' }, commitBody: { color: '#BED0CA', fontSize: 10, marginTop: 3 }, participation: { marginTop: 15, gap: 8 }, rewardHead: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 15 }, rewardIcon: { width: 43, height: 43, borderRadius: 14, backgroundColor: Palette.amber, alignItems: 'center', justifyContent: 'center' }, link: { color: Palette.mintDark, fontWeight: '900', fontSize: 11 },
-  listCard: { flexDirection: 'row', alignItems: 'center', gap: 12 }, listIcon: { width: 50, height: 50, borderRadius: 17, backgroundColor: '#E6F3F9', alignItems: 'center', justifyContent: 'center' }, titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, itemTitle: { color: Palette.ink, fontSize: 14, fontWeight: '900' }, description: { color: Palette.inkSoft, fontSize: 11, marginTop: 6 }, leagueRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderBottomWidth: 1, borderBottomColor: Palette.line }, highlight: { backgroundColor: '#F3F9DE' }, rank: { color: Palette.ink, fontWeight: '900', width: 18 }, teamIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, score: { color: Palette.mintDark, fontSize: 18, fontWeight: '900' }, stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
-  voucher: { gap: 18 }, voucherTitle: { color: Palette.ink, fontSize: 23, fontWeight: '900', marginTop: 5 }, voucherValue: { color: Palette.ink, fontSize: 30, fontWeight: '900' }, prizeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Palette.line }, prizeIcon: { width: 47, height: 47, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  empty: { alignItems: 'center', gap: 14, paddingVertical: 32 }, emptyIcon: { width: 64, height: 64, borderRadius: 22, backgroundColor: Palette.lime, alignItems: 'center', justifyContent: 'center' }, backdrop: { flex: 1, backgroundColor: 'rgba(8,30,29,.58)', alignItems: 'center', justifyContent: 'center', padding: 20 }, modal: { width: '100%', maxWidth: 470, gap: 15 }, preference: { flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: Palette.line, paddingVertical: 12 }, qr: { alignItems: 'center', paddingVertical: 20 },
-  tabBar: { flexDirection: 'row', backgroundColor: Palette.paper, borderTopWidth: 1, borderTopColor: Palette.line, paddingTop: 7 }, tab: { flex: 1, alignItems: 'center', gap: 2 }, tabIconWrap: { width: 34, height: 27, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, tabIconActive: { backgroundColor: Palette.lime }, tabIcon: { color: Palette.inkSoft, fontSize: 17 }, tabIconTextActive: { color: Palette.ink }, tabLabel: { color: Palette.inkSoft, fontSize: 8 }, tabLabelActive: { color: Palette.ink, fontWeight: '900' },
+  safe: { flex: 1, backgroundColor: Palette.cream },
+  page: { width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 64, gap: 26 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 },
+  loadingTitle: { color: Palette.ink, fontSize: 20, fontWeight: '900' },
+  errorText: { color: Palette.danger, textAlign: 'center' },
+  header: { minHeight: 54, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  nameBlock: { alignItems: 'flex-end' },
+  hello: { color: Palette.ink, fontSize: 13, fontWeight: '900' },
+  university: { color: Palette.inkMuted, fontSize: 10, marginTop: 2 },
+  signOut: { minHeight: 40, paddingHorizontal: 10, paddingVertical: 8 },
+  notice: { backgroundColor: '#D9F8EC', borderRadius: 14, padding: 13, borderWidth: 1, borderColor: '#A8E5CF' },
+  noticeError: { backgroundColor: '#FFE9E6', borderColor: '#F2B8B1' },
+  noticeText: { color: Palette.ink, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  heroGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
+  personalCard: { flex: 1, minWidth: 260, minHeight: 300, justifyContent: 'space-between', backgroundColor: '#F9FFED', borderColor: '#D7EBAF' },
+  personalMain: { flexDirection: 'row', alignItems: 'center', gap: 20, marginVertical: 30 },
+  divider: { width: 1, height: 74, backgroundColor: '#D7E4D1' },
+  bigNumber: { color: Palette.ink, fontSize: 42, lineHeight: 46, fontWeight: '900', letterSpacing: -1.5 },
+  bigUnit: { color: Palette.inkSoft, fontSize: 13, fontWeight: '700', marginTop: 2 },
+  contribution: { color: Palette.mintDark, fontSize: 12, lineHeight: 18, fontWeight: '800' },
+  universityCard: { flex: 1.4, minWidth: 260, minHeight: 300, backgroundColor: Palette.ink, borderColor: Palette.ink, justifyContent: 'space-between' },
+  universityTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 },
+  mintEyebrow: { color: Palette.mint },
+  universityKwh: { color: '#D8E4E1', fontSize: 13, fontWeight: '700', marginTop: 7 },
+  percentBadge: { width: 58, height: 58, borderRadius: 20, backgroundColor: Palette.navyLight, alignItems: 'center', justifyContent: 'center' },
+  percent: { color: Palette.lime, fontSize: 18, fontWeight: '900' },
+  pointsRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 24, marginBottom: 10 },
+  pointsCurrent: { color: Palette.paper, fontSize: 32, fontWeight: '900' },
+  pointsTarget: { color: '#AFC2BE', fontSize: 13, fontWeight: '700' },
+  milestoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginTop: 22 },
+  nextLabel: { color: Palette.mint, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  nextReward: { color: Palette.paper, fontSize: 18, fontWeight: '900', marginTop: 4 },
+  remaining: { color: Palette.lime, fontSize: 11, fontWeight: '900' },
+  allUnlocked: { marginTop: 28, gap: 7 },
+  allUnlockedTitle: { color: Palette.paper, fontSize: 23, fontWeight: '900' },
+  darkMuted: { color: '#AFC2BE', fontSize: 13 },
+  section: { gap: 16 },
+  rewardGroup: { gap: 9 },
+  groupLabel: { color: Palette.inkMuted, fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  rewardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  rewardCard: { flex: 1, minWidth: 245, maxWidth: 355, gap: 13, padding: 17, borderRadius: 20 },
+  lockedCard: { backgroundColor: '#F4F6F5', shadowOpacity: 0.02 },
+  rewardIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: Palette.lime, alignItems: 'center', justifyContent: 'center' },
+  lockedIcon: { backgroundColor: Palette.paperMuted },
+  rewardIconText: { color: Palette.ink, fontSize: 21, fontWeight: '900' },
+  rewardCopy: { flex: 1 },
+  rewardName: { color: Palette.ink, fontSize: 16, fontWeight: '900' },
+  rewardDescription: { color: Palette.inkSoft, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  rewardThreshold: { color: Palette.mintDark, fontSize: 10, fontWeight: '900', marginTop: 8 },
+  redeemButton: { alignSelf: 'stretch' },
+  historyCard: { padding: 6, borderRadius: 20 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  historyBorder: { borderBottomWidth: 1, borderBottomColor: Palette.line },
+  historyIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#D9F8EC', alignItems: 'center', justifyContent: 'center' },
+  check: { color: Palette.success, fontSize: 16, fontWeight: '900' },
+  historyCopy: { flex: 1 },
+  historyName: { color: Palette.ink, fontSize: 13, fontWeight: '900' },
+  historyDate: { color: Palette.inkMuted, fontSize: 10, marginTop: 3 },
+  historyEmpty: { color: Palette.inkMuted, textAlign: 'center', padding: 24, fontSize: 12 },
 });
