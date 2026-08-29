@@ -1,3 +1,19 @@
+export const Palette = {
+  ink: '#102A2A',
+  inkSoft: '#496261',
+  cream: '#F7F5ED',
+  paper: '#FFFFFF',
+  mint: '#73E6AF',
+  mintDark: '#187A59',
+  lime: '#D8F36B',
+  coral: '#FF8066',
+  amber: '#F7C85B',
+  blue: '#79C8F2',
+  line: '#DDE6DF',
+  danger: '#B53F36',
+  shadow: '#0A3028',
+} as const;
+
 /**
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.

@@ -1,3 +1,26 @@
+# CommonGrid
+
+A modular behavior-change platform that turns verified residence sustainability outcomes into seven-day team
+challenges and university-funded in-app rewards.
+
+## Demo
+
+```bash
+npm install
+npm run web
+```
+
+Choose **Student demo** to experience onboarding and the idle-AC challenge. Choose **University admin** to adjust
+the target and reward pool or advance the simulated BMS feed to day 7. Return to the student wallet to reveal the
+issued voucher.
+
+The demo deliberately runs without a backend so it remains reliable during judging. To connect Supabase, copy
+`.env.example`, apply the migrations in `supabase/migrations`, and use the client boundary in
+`src/lib/supabase.ts`. See `docs/architecture.md` for security boundaries and instructions for adding another
+behavior module.
+
+---
+
 **Hackathon:** Lifehack 2026 \
 **Track:** Sustainability \
 **Date:** 29-30 August, 2026 \
