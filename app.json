@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "CommonGrid",
-    "slug": "common-grid",
+    "slug": "commongrid",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -40,6 +40,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6b926a1b-e125-49a7-bd3c-e82264270c5c"
+      }
+    },
+    "owner": "introvertbytess-team"
   }
 }

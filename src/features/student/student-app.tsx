@@ -6,6 +6,8 @@ import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Stop } from 're
 import { Brand, Button, Pill } from '@/components/ui/app-ui';
 import { Palette } from '@/constants/theme';
 import { rewardProgress } from '@/core/mvp/rules';
+import { eligibilityCutoff, hallTierForRank, isShowcaseEligible, showcaseRankForEmail, showcaseStudent, type ShowcaseTab } from '@/features/student/nus-showcase-data';
+import { HallsShowcase, HomeCompetitionCard, JourneyShowcase, ShowcaseNav } from '@/features/student/nus-showcase';
 import { type MvpReward, type SavingsHistoryPoint, useApp } from '@/state/app-context';
 
 export function StudentApp() {
@@ -13,6 +15,7 @@ export function StudentApp() {
   const [redeeming, setRedeeming] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [celebration, setCelebration] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ShowcaseTab>('home');
   const { width } = useWindowDimensions();
   const compact = width < 560;
 
@@ -30,6 +33,9 @@ export function StudentApp() {
   const kwhToUnlock = progress.remaining / 10;
   const rewards = sortRewards(studentHome.rewards, studentHome.nextReward?.id);
   const unlockedReward = rewards.find((reward) => reward.state === 'unlocked');
+  const showcaseRank = showcaseRankForEmail(profile?.email);
+  const showcaseTier = hallTierForRank(2);
+  const showcaseEligible = isShowcaseEligible(showcaseRank, showcaseStudent.contributorCount, showcaseTier.eligiblePercent);
 
   const redeem = async (reward: MvpReward) => {
     setRedeeming(reward.id);
@@ -57,13 +63,18 @@ export function StudentApp() {
         </View>
       </View>
 
+      <ShowcaseNav active={activeTab} onChange={setActiveTab} />
+
       {celebration && <Celebration reward={celebration} />}
       {studentPointGain && <PointGain points={studentPointGain} unlocked={Boolean(unlockedReward)} />}
       {notice && <View style={[styles.notice, notice.tone === 'error' && styles.noticeError]}><Text style={styles.noticeText}>{notice.text}</Text></View>}
       {error && <View style={[styles.notice, styles.noticeError]}><Text style={styles.noticeText}>{error}</Text></View>}
 
-      {unlockedReward ? <UnlockedStage
+      {activeTab === 'home' ? <>
+        {unlockedReward ? <UnlockedStage
         reward={unlockedReward}
+        contributorRank={showcaseRank}
+        eligible={showcaseEligible}
         busy={redeeming === unlockedReward.id}
         onRedeem={() => redeem(unlockedReward)}
       /> : <ProgressStage
@@ -75,40 +86,46 @@ export function StudentApp() {
         ratio={progress.ratio}
         percentage={progress.percentage}
         accent={accent}
-      />}
+        />}
 
-      <View style={[styles.personalStrip, compact && styles.personalStripCompact]}>
-        <View style={[styles.personalIntro, compact && styles.personalIntroCompact]}><Text style={styles.kicker}>YOUR IMPACT</Text><Text style={styles.personalTitle}>You’re moving the grid.</Text></View>
-        <View style={[styles.personalStat, compact && styles.personalStatCompact]}><Text style={styles.personalValue}><AnimatedNumber value={studentHome.personalPoints} /></Text><Text style={styles.personalLabel}>points earned</Text></View>
-        <View style={styles.stripDivider} />
-        <View style={[styles.personalStat, compact && styles.personalStatCompact]}><Text style={styles.personalValue}>{formatNumber(studentHome.personalKwh)}</Text><Text style={styles.personalLabel}>kWh saved</Text></View>
-      </View>
+        <View style={[styles.personalStrip, compact && styles.personalStripCompact]}>
+          <View style={[styles.personalIntro, compact && styles.personalIntroCompact]}><Text style={styles.kicker}>YOUR IMPACT</Text><Text style={styles.personalTitle}>You’re moving the grid.</Text></View>
+          <View style={[styles.personalStat, compact && styles.personalStatCompact]}><Text style={styles.personalValue}><AnimatedNumber value={studentHome.personalPoints} /></Text><Text style={styles.personalLabel}>points earned</Text></View>
+          <View style={styles.stripDivider} />
+          <View style={[styles.personalStat, compact && styles.personalStatCompact]}><Text style={styles.personalValue}>{formatNumber(studentHome.personalKwh)}</Text><Text style={styles.personalLabel}>kWh saved</Text></View>
+        </View>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Rewards</Text><Text style={styles.sectionMeta}>{studentHome.rewards.filter((reward) => reward.state === 'unlocked').length} ready to redeem</Text></View><View style={styles.spark}><Text style={styles.sparkText}>✦</Text></View></View>
-        <View style={styles.rewardList}>{rewards.map((reward, index) => <RewardRow
-          key={reward.id}
-          reward={reward}
-          index={index}
-          currentPoints={studentHome.universityPoints}
-          isNext={reward.id === studentHome.nextReward?.id}
-          busy={redeeming === reward.id}
-          onRedeem={() => redeem(reward)}
-        />)}</View>
-      </View>
+        <HomeCompetitionCard rewardUnlocked={Boolean(unlockedReward)} contributorRank={showcaseRank} />
 
-      <SavingsChart history={studentHome.savingsHistory} totalKwh={studentHome.personalKwh} />
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Rewards</Text><Text style={styles.sectionMeta}>{studentHome.rewards.filter((reward) => reward.state === 'unlocked').length} ready to redeem</Text></View><View style={styles.spark}><Text style={styles.sparkText}>✦</Text></View></View>
+          <View style={styles.rewardList}>{rewards.map((reward, index) => <RewardRow
+            key={reward.id}
+            reward={reward}
+            index={index}
+            currentPoints={studentHome.universityPoints}
+            isNext={reward.id === studentHome.nextReward?.id}
+            eligible={showcaseEligible}
+            busy={redeeming === reward.id}
+            onRedeem={() => redeem(reward)}
+          />)}</View>
+        </View>
 
-      <View style={styles.historySection}>
-        <Text style={styles.historyTitle}>Redemption history</Text>
-        {studentHome.redemptions.length === 0 ? <Text style={styles.historyEmpty}>Nothing redeemed yet.</Text> : studentHome.redemptions.map((item, index) => <View key={item.id} style={[styles.historyRow, index > 0 && styles.historyBorder]}><View style={styles.historyCheck}><Text style={styles.historyCheckText}>✓</Text></View><View style={styles.historyCopy}><Text style={styles.historyName}>{item.rewardName}</Text><Text style={styles.historyDate}>{formatDate(item.redeemedAt)}</Text></View><Text style={styles.historyStatus}>Redeemed</Text></View>)}
-      </View>
+        <SavingsChart history={studentHome.savingsHistory} totalKwh={studentHome.personalKwh} />
+
+        <View style={styles.historySection}>
+          <Text style={styles.historyTitle}>Redemption history</Text>
+          {studentHome.redemptions.length === 0 ? <Text style={styles.historyEmpty}>Nothing redeemed yet.</Text> : studentHome.redemptions.map((item, index) => <View key={item.id} style={[styles.historyRow, index > 0 && styles.historyBorder]}><View style={styles.historyCheck}><Text style={styles.historyCheckText}>✓</Text></View><View style={styles.historyCopy}><Text style={styles.historyName}>{item.rewardName}</Text><Text style={styles.historyDate}>{formatDate(item.redeemedAt)}</Text></View><Text style={styles.historyStatus}>Redeemed</Text></View>)}
+        </View>
+      </> : activeTab === 'halls' ? <HallsShowcase compact={compact} /> : <JourneyShowcase compact={compact} contributorRank={showcaseRank} />}
     </ScrollView>
   </SafeAreaView>;
 }
 
-function UnlockedStage({ reward, busy, onRedeem }: { reward: MvpReward; busy: boolean; onRedeem: () => void }) {
+function UnlockedStage({ reward, contributorRank, eligible, busy, onRedeem }: { reward: MvpReward; contributorRank: number; eligible: boolean; busy: boolean; onRedeem: () => void }) {
   const entrance = useEntrance(0);
+  const tier = hallTierForRank(2);
+  const cutoff = eligibilityCutoff(showcaseStudent.contributorCount, tier.eligiblePercent);
   return <Animated.View style={[styles.unlockedStage, entrance]}>
     <View style={styles.unlockHaloOne} /><View style={styles.unlockHaloTwo} />
     <View style={styles.unlockTop}><Text style={styles.unlockKicker}>MILESTONE REACHED</Text><View style={styles.unlockBadge}><Text style={styles.unlockBadgeText}>100%</Text></View></View>
@@ -116,8 +133,12 @@ function UnlockedStage({ reward, busy, onRedeem }: { reward: MvpReward; busy: bo
     <Text style={styles.unlockTitle}>Reward unlocked</Text>
     <Text style={styles.unlockReward}>{reward.name}</Text>
     <Text style={styles.unlockPoints}>{reward.pointsRequired.toLocaleString()} / {reward.pointsRequired.toLocaleString()} pts</Text>
+    <View style={styles.unlockEligibility}>
+      <View style={[styles.unlockEligibilityBadge, !eligible && styles.unlockEligibilityBadgeMissed]}><Text style={styles.unlockEligibilityBadgeText}>{eligible ? '✓' : '↑'}</Text></View>
+      <View style={styles.unlockEligibilityCopy}><Text style={styles.unlockEligibilityTitle}>{tier.tier} reward · {eligible ? 'You qualify' : 'Cutoff not reached'}</Text><Text style={styles.unlockEligibilityMeta}>Kent Ridge finished 2nd · rank #{contributorRank} · top {cutoff} qualify</Text></View>
+    </View>
     <View style={styles.unlockProgress}><AnimatedProgress value={1} color={Palette.lime} /></View>
-    <Button onPress={onRedeem} disabled={busy} style={styles.unlockButton}>{busy ? 'Redeeming…' : 'Redeem reward'}</Button>
+    {eligible ? <Button onPress={onRedeem} disabled={busy} style={styles.unlockButton}>{busy ? 'Redeeming…' : 'Redeem reward'}</Button> : <View style={styles.unlockUnavailable}><Text style={styles.unlockUnavailableText}>Reward reserved for qualifying contributors</Text></View>}
   </Animated.View>;
 }
 
@@ -208,7 +229,7 @@ function SavingsChart({ history, totalKwh }: { history: SavingsHistoryPoint[]; t
   </Animated.View>;
 }
 
-function RewardRow({ reward, index, currentPoints, isNext, busy, onRedeem }: { reward: MvpReward; index: number; currentPoints: number; isNext: boolean; busy: boolean; onRedeem: () => void }) {
+function RewardRow({ reward, index, currentPoints, isNext, eligible, busy, onRedeem }: { reward: MvpReward; index: number; currentPoints: number; isNext: boolean; eligible: boolean; busy: boolean; onRedeem: () => void }) {
   const entrance = useEntrance(170 + index * 45);
   const progress = rewardProgress(currentPoints, reward.pointsRequired);
   const unlocked = reward.state === 'unlocked';
@@ -222,7 +243,7 @@ function RewardRow({ reward, index, currentPoints, isNext, busy, onRedeem }: { r
       {isNext && <View style={styles.rewardMiniProgress}><View style={[styles.rewardMiniFill, { width: `${progress.percentage}%` }]} /></View>}
       <Text style={[styles.rewardRequirement, unlocked && styles.rewardRequirementUnlocked]}>{redeemed ? `Redeemed ${formatDate(reward.redeemedAt ?? '')}` : unlocked ? 'Ready now' : isNext ? `${progress.remaining.toLocaleString()} pts away` : `${reward.pointsRequired.toLocaleString()} pts`}</Text>
     </View>
-    {unlocked ? <Button onPress={onRedeem} disabled={busy} style={styles.redeemButton}>{busy ? '…' : 'Redeem'}</Button> : <View style={styles.rewardState}><Text style={styles.rewardStateText}>{redeemed ? 'Claimed' : 'Locked'}</Text></View>}
+    {unlocked && eligible ? <Button onPress={onRedeem} disabled={busy} style={styles.redeemButton}>{busy ? '…' : 'Redeem'}</Button> : <View style={styles.rewardState}><Text style={styles.rewardStateText}>{redeemed ? 'Claimed' : unlocked ? 'Not eligible' : 'Locked'}</Text></View>}
   </Animated.View>;
 }
 
@@ -362,9 +383,18 @@ const styles = StyleSheet.create({
   unlockGlyphText: { color: Palette.ink, fontSize: 34, fontWeight: '900' },
   unlockTitle: { color: '#ADD0BD', fontSize: 11, fontWeight: '900', letterSpacing: .7, textTransform: 'uppercase', marginTop: 15 },
   unlockReward: { color: Palette.paper, fontSize: 29, lineHeight: 34, fontWeight: '900', letterSpacing: -.9, textAlign: 'center', marginTop: 5 },
-  unlockPoints: { color: Palette.lime, fontSize: 12, fontWeight: '900', marginTop: 8, marginBottom: 20 },
+  unlockPoints: { color: Palette.lime, fontSize: 12, fontWeight: '900', marginTop: 8, marginBottom: 14 },
+  unlockEligibility: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1B4939', borderWidth: 1, borderColor: '#4F7756', borderRadius: 15, padding: 11, marginBottom: 17 },
+  unlockEligibilityBadge: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: Palette.lime },
+  unlockEligibilityBadgeMissed: { backgroundColor: '#91A89B' },
+  unlockEligibilityBadgeText: { color: Palette.ink, fontSize: 16, fontWeight: '900' },
+  unlockEligibilityCopy: { flex: 1 },
+  unlockEligibilityTitle: { color: Palette.paper, fontSize: 10, fontWeight: '900' },
+  unlockEligibilityMeta: { color: '#A9C5B8', fontSize: 8, fontWeight: '700', marginTop: 3 },
   unlockProgress: { width: '100%' },
   unlockButton: { width: '100%', marginTop: 24, minHeight: 54 },
+  unlockUnavailable: { width: '100%', minHeight: 50, marginTop: 24, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#29483E', borderWidth: 1, borderColor: '#426357' },
+  unlockUnavailableText: { color: '#B7CBC1', fontSize: 10, fontWeight: '900', textAlign: 'center' },
   personalStrip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Palette.paper, borderLeftWidth: 4, borderLeftColor: Palette.mintDark, paddingHorizontal: 18, paddingVertical: 17, shadowColor: Palette.shadow, shadowOpacity: .05, shadowRadius: 14 },
   personalStripCompact: { flexWrap: 'wrap' },
   personalIntro: { flex: 1.3, minWidth: 110 },

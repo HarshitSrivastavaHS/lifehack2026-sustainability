@@ -2,7 +2,7 @@
 
 ## Current objective
 
-Deliver a polished, mobile-first student experience and a judge-ready demo video for the existing hackathon MVP without changing its backend or product scope.
+Preserve the working electricity/reward MVP while adding a presentation-only NUS inter-hall competition, streak calendar, and achievements to the student experience.
 
 ## Architecture and important decisions
 
@@ -16,8 +16,8 @@ Deliver a polished, mobile-first student experience and a judge-ready demo video
 
 ## User requirements and constraints
 
-- One university, students, and one admin only.
-- No residences, floors, groups, missions, challenges, XP, levels, streaks, achievements, leaderboards, other environmental metrics, QR codes, or complex analytics.
+- One university, students, and one admin only; NUS halls are a frontend-only competition layer, not backend organizations.
+- No floors, missions, XP, levels, QR codes, or new environmental metrics.
 - Student: personal kWh/points, university progress, rewards, redemption, and history.
 - Admin: dashboard, student account management, electricity simulation, and reward management.
 - Every visible action must work against Supabase and survive refresh/re-login.
@@ -29,6 +29,7 @@ Deliver a polished, mobile-first student experience and a judge-ready demo video
 - Final student polish: `src/features/student/student-app.tsx` and the student read mapping in `src/state/app-context.tsx`.
 - Demo-moment polish: the same two client files now add silent student refresh, point-gain feedback, and a milestone unlock takeover; no backend/admin files changed.
 - Demo assets: `artifacts/demo-video/CommonGrid-demo.mp4` and `CommonGrid-demo-cover.jpg`.
+- NUS showcase: `src/features/student/nus-showcase.tsx`, typed fixtures and tier helpers in `nus-showcase-data.ts`, plus regression tests.
 - Backend: migrations `024`–`026`, `supabase/functions/manage-student/`, and function configuration.
 - Removed obsolete client feature modules and QR/camera/document dependencies/plugins.
 - Updated `README.md` and `docs/architecture.md` for the active MVP.
@@ -47,10 +48,15 @@ Deliver a polished, mobile-first student experience and a judge-ready demo video
 - An unlocked reward now replaces the next-goal hero with a 100% milestone state and direct redeem action; after redemption, the next milestone resumes. Rewards stay above the supporting history chart.
 - The unlocked milestone progress track is explicitly full-width, verified from the rendered GUI.
 - A 47-second 1280×720 H.264 demo records the actual Expo GUI through student progress, admin 8 kWh simulation, 1,000-point unlock, redemption, and history, with animated transitions and concise captions. Network interception simulated only the recording mutation, so hosted demo data stayed at its checkpoint.
+- Student navigation now exposes Home, Halls, and Journey. Home retains the real Supabase progression and rewards, while the two new screens use presentation fixtures.
+- Weekly/monthly standings cover all seven NUS halls. Rank determines reward value and eligibility: Gold/top 40%, Silver/top 30%, Bronze/top 20%, Starter/top 10%.
+- Kent Ridge is second in the weekly sprint; Alice is #12 of 80 and inside the Silver top-24 cutoff. Demo profiles outside the cutoff see no Redeem button, while backend authorization remains unchanged.
+- Journey includes an 11-day streak, responsive 35-day savings calendar, seven-day activity chart, and six locked/unlocked achievements.
+- Submission video is complete at `artifacts/submission-video/CommonGrid-submission.mp4`: 2:47, 1280x720, real GUI capture, Singapore English male neural narration, captions, transitions, ambient audio, Home/Halls/Journey/admin flow, 920 to 1,000 unlock, contributor eligibility, and redemption confirmation. Recording-only route interception kept hosted Supabase data unchanged.
 
 ## Still pending
 
-- No requested MVP work remains. Physical-device visual checking remains optional; the responsive web/Expo build is valid.
+- No work is pending for the requested submission video.
 
 ## Known bugs and failed approaches
 
@@ -63,12 +69,14 @@ Deliver a polished, mobile-first student experience and a judge-ready demo video
 
 Validated on 2026-08-29:
 
-- `npm test` — pass, 3 MVP rule tests.
+- `npm test` — pass, 6 tests across 2 files.
 - `npm run lint` — pass.
 - `npx tsc --noEmit` — pass.
 - `npx expo export --platform web` — pass.
 - Final demo-moment pass — `npm test`, `npm run lint`, `npx tsc --noEmit`, `npx expo export --platform web`, and `git diff --check` all pass.
 - Video verification — 47.57 seconds, 1280×720, 30 fps, H.264/yuv420p MP4 with fast-start metadata; key unlock and redemption frames visually inspected.
+- Final submission video — 2:47.23, 1280x720, 30 fps, H.264 High/yuv420p video with AAC-LC 48 kHz stereo audio and fast-start metadata. Contact-sheet QA verified the 920-point student state, hall standings, Journey, 920-point admin state, 1,000-point result, unlocked reward, redemption confirmation, and closing title.
+- NUS showcase — rendered at 1280×800 and 390×844; Home, hall standings, period controls, prize ladder, calendar, charts, and achievements visually inspected with no clipping or horizontal overflow.
 - Final student polish: hosted read confirms the chart receives Alice's real 12 kWh history and the reward checkpoint remains 920/1,000; tests, lint, TypeScript, web export, and `git diff --check` pass.
 - Expo web/Metro smoke test — HTTP 200, no bundle/runtime compile error.
 - `npx supabase db lint --linked` — pass, no schema errors.
@@ -79,4 +87,4 @@ Validated on 2026-08-29:
 
 ## Exact next recommended action
 
-Submit `artifacts/demo-video/CommonGrid-demo.mp4`; use its matching cover image as the submission thumbnail, then rehearse the same 920 → 1,000 flow live.
+Watch `artifacts/submission-video/CommonGrid-submission.mp4` once on the intended submission device, then upload it without recompression if the platform accepts the 8.7 MB H.264/AAC file.
