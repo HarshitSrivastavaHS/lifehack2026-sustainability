@@ -9,21 +9,27 @@ import { rewardProgress } from '@/core/mvp/rules';
 import { type MvpReward, type SavingsHistoryPoint, useApp } from '@/state/app-context';
 
 export function StudentApp() {
-  const { profile, studentHome, loading, error, logout, refresh, redeemReward } = useApp();
+  const { profile, studentHome, studentPointGain, loading, error, logout, refresh, redeemReward } = useApp();
   const [redeeming, setRedeeming] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [celebration, setCelebration] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const compact = width < 560;
 
+  useEffect(() => {
+    const interval = setInterval(() => { void refresh(true); }, 4000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
   if (!studentHome) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><View style={styles.loadingBolt}><Text style={styles.loadingBoltText}>↯</Text></View><Text style={styles.loadingTitle}>{loading ? 'Loading your progress…' : 'Progress unavailable'}</Text>{error && <Text style={styles.errorText}>{error}</Text>}{!loading && <Button onPress={refresh} variant="secondary">Try again</Button>}</View></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><View style={styles.center}><View style={styles.loadingBolt}><Text style={styles.loadingBoltText}>↯</Text></View><Text style={styles.loadingTitle}>{loading ? 'Loading your progress…' : 'Progress unavailable'}</Text>{error && <Text style={styles.errorText}>{error}</Text>}{!loading && <Button onPress={() => { void refresh(); }} variant="secondary">Try again</Button>}</View></SafeAreaView>;
   }
 
   const progress = rewardProgress(studentHome.universityPoints, studentHome.nextReward?.pointsRequired ?? null);
   const accent = progress.percentage >= 85 ? Palette.lime : Palette.mint;
   const kwhToUnlock = progress.remaining / 10;
   const rewards = sortRewards(studentHome.rewards, studentHome.nextReward?.id);
+  const unlockedReward = rewards.find((reward) => reward.state === 'unlocked');
 
   const redeem = async (reward: MvpReward) => {
     setRedeeming(reward.id);
@@ -35,7 +41,6 @@ export function StudentApp() {
       return;
     }
     setCelebration(reward.name);
-    setNotice({ tone: 'success', text: 'Added to your rewards.' });
     setTimeout(() => setCelebration(null), 2200);
   };
 
@@ -43,7 +48,7 @@ export function StudentApp() {
     <ScrollView
       contentContainerStyle={[styles.page, compact && styles.pageCompact]}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={Palette.mintDark} />}>
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { void refresh(); }} tintColor={Palette.mintDark} />}>
       <View style={styles.header}>
         <Brand />
         <View style={styles.headerRight}>
@@ -53,10 +58,15 @@ export function StudentApp() {
       </View>
 
       {celebration && <Celebration reward={celebration} />}
+      {studentPointGain && <PointGain points={studentPointGain} unlocked={Boolean(unlockedReward)} />}
       {notice && <View style={[styles.notice, notice.tone === 'error' && styles.noticeError]}><Text style={styles.noticeText}>{notice.text}</Text></View>}
       {error && <View style={[styles.notice, styles.noticeError]}><Text style={styles.noticeText}>{error}</Text></View>}
 
-      <ProgressStage
+      {unlockedReward ? <UnlockedStage
+        reward={unlockedReward}
+        busy={redeeming === unlockedReward.id}
+        onRedeem={() => redeem(unlockedReward)}
+      /> : <ProgressStage
         points={studentHome.universityPoints}
         target={studentHome.nextReward?.pointsRequired ?? null}
         nextReward={studentHome.nextReward?.name ?? null}
@@ -65,7 +75,7 @@ export function StudentApp() {
         ratio={progress.ratio}
         percentage={progress.percentage}
         accent={accent}
-      />
+      />}
 
       <View style={[styles.personalStrip, compact && styles.personalStripCompact]}>
         <View style={[styles.personalIntro, compact && styles.personalIntroCompact]}><Text style={styles.kicker}>YOUR IMPACT</Text><Text style={styles.personalTitle}>You’re moving the grid.</Text></View>
@@ -73,8 +83,6 @@ export function StudentApp() {
         <View style={styles.stripDivider} />
         <View style={[styles.personalStat, compact && styles.personalStatCompact]}><Text style={styles.personalValue}>{formatNumber(studentHome.personalKwh)}</Text><Text style={styles.personalLabel}>kWh saved</Text></View>
       </View>
-
-      <SavingsChart history={studentHome.savingsHistory} totalKwh={studentHome.personalKwh} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Rewards</Text><Text style={styles.sectionMeta}>{studentHome.rewards.filter((reward) => reward.state === 'unlocked').length} ready to redeem</Text></View><View style={styles.spark}><Text style={styles.sparkText}>✦</Text></View></View>
@@ -89,12 +97,36 @@ export function StudentApp() {
         />)}</View>
       </View>
 
+      <SavingsChart history={studentHome.savingsHistory} totalKwh={studentHome.personalKwh} />
+
       <View style={styles.historySection}>
         <Text style={styles.historyTitle}>Redemption history</Text>
         {studentHome.redemptions.length === 0 ? <Text style={styles.historyEmpty}>Nothing redeemed yet.</Text> : studentHome.redemptions.map((item, index) => <View key={item.id} style={[styles.historyRow, index > 0 && styles.historyBorder]}><View style={styles.historyCheck}><Text style={styles.historyCheckText}>✓</Text></View><View style={styles.historyCopy}><Text style={styles.historyName}>{item.rewardName}</Text><Text style={styles.historyDate}>{formatDate(item.redeemedAt)}</Text></View><Text style={styles.historyStatus}>Redeemed</Text></View>)}
       </View>
     </ScrollView>
   </SafeAreaView>;
+}
+
+function UnlockedStage({ reward, busy, onRedeem }: { reward: MvpReward; busy: boolean; onRedeem: () => void }) {
+  const entrance = useEntrance(0);
+  return <Animated.View style={[styles.unlockedStage, entrance]}>
+    <View style={styles.unlockHaloOne} /><View style={styles.unlockHaloTwo} />
+    <View style={styles.unlockTop}><Text style={styles.unlockKicker}>MILESTONE REACHED</Text><View style={styles.unlockBadge}><Text style={styles.unlockBadgeText}>100%</Text></View></View>
+    <View style={styles.unlockGlyph}><Text style={styles.unlockGlyphText}>✦</Text></View>
+    <Text style={styles.unlockTitle}>Reward unlocked</Text>
+    <Text style={styles.unlockReward}>{reward.name}</Text>
+    <Text style={styles.unlockPoints}>{reward.pointsRequired.toLocaleString()} / {reward.pointsRequired.toLocaleString()} pts</Text>
+    <View style={styles.unlockProgress}><AnimatedProgress value={1} color={Palette.lime} /></View>
+    <Button onPress={onRedeem} disabled={busy} style={styles.unlockButton}>{busy ? 'Redeeming…' : 'Redeem reward'}</Button>
+  </Animated.View>;
+}
+
+function PointGain({ points, unlocked }: { points: number; unlocked: boolean }) {
+  const entrance = useEntrance(0);
+  return <Animated.View style={[styles.pointGain, unlocked && styles.pointGainUnlocked, entrance]}>
+    <View style={styles.pointGainIcon}><Text style={styles.pointGainSpark}>↯</Text></View>
+    <View style={styles.pointGainCopy}><Text style={styles.pointGainValue}>+{points.toLocaleString()} pts</Text><Text style={styles.pointGainLabel}>{unlocked ? 'University goal reached' : 'University progress updated'}</Text></View>
+  </Animated.View>;
 }
 
 function ProgressStage({ points, target, nextReward, remaining, kwhToUnlock, ratio, percentage, accent }: {
@@ -281,6 +313,13 @@ const styles = StyleSheet.create({
   notice: { backgroundColor: '#DDF8ED', borderRadius: 13, padding: 11, borderWidth: 1, borderColor: '#A9E5CF' },
   noticeError: { backgroundColor: '#FFE9E6', borderColor: '#F1B8B0' },
   noticeText: { color: Palette.ink, fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  pointGain: { flexDirection: 'row', alignItems: 'center', gap: 11, alignSelf: 'center', minWidth: 218, backgroundColor: '#0E3543', borderWidth: 1, borderColor: '#2C5660', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 11, shadowColor: Palette.shadow, shadowOpacity: .16, shadowRadius: 14 },
+  pointGainUnlocked: { backgroundColor: '#24451D', borderColor: '#6E9A45' },
+  pointGainIcon: { width: 37, height: 37, borderRadius: 13, backgroundColor: Palette.lime, alignItems: 'center', justifyContent: 'center' },
+  pointGainSpark: { color: Palette.ink, fontSize: 20, fontWeight: '900' },
+  pointGainCopy: { flex: 1 },
+  pointGainValue: { color: Palette.paper, fontSize: 16, fontWeight: '900', letterSpacing: -.3 },
+  pointGainLabel: { color: '#B8CECA', fontSize: 9, fontWeight: '800', marginTop: 2 },
   stage: { position: 'relative', overflow: 'hidden', backgroundColor: '#0A2535', minHeight: 420, borderRadius: 30, padding: 24, shadowColor: '#041D29', shadowOffset: { width: 0, height: 16 }, shadowOpacity: .2, shadowRadius: 28 },
   stageOrbOne: { position: 'absolute', width: 210, height: 210, borderRadius: 105, backgroundColor: '#153F4A', right: -86, top: -92 },
   stageOrbTwo: { position: 'absolute', width: 150, height: 150, borderRadius: 75, borderWidth: 30, borderColor: '#103847', left: -80, bottom: -68 },
@@ -312,6 +351,20 @@ const styles = StyleSheet.create({
   actionHintStrong: { color: Palette.paper, fontWeight: '900' },
   completeStage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 7 },
   completeIcon: { color: Palette.lime, fontSize: 42 }, completeTitle: { color: Palette.paper, fontSize: 25, fontWeight: '900' }, completeBody: { color: '#9BB4B5', fontSize: 12 },
+  unlockedStage: { position: 'relative', overflow: 'hidden', minHeight: 420, alignItems: 'center', backgroundColor: '#102F30', borderRadius: 30, padding: 24, shadowColor: '#173D25', shadowOffset: { width: 0, height: 18 }, shadowOpacity: .26, shadowRadius: 30, borderWidth: 1, borderColor: '#477344' },
+  unlockHaloOne: { position: 'absolute', width: 260, height: 260, borderRadius: 130, backgroundColor: '#315B31', opacity: .52, top: -130, right: -90 },
+  unlockHaloTwo: { position: 'absolute', width: 230, height: 230, borderRadius: 115, borderWidth: 35, borderColor: '#224C38', opacity: .7, bottom: -145, left: -105 },
+  unlockTop: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  unlockKicker: { color: Palette.lime, fontSize: 9, fontWeight: '900', letterSpacing: 1.4 },
+  unlockBadge: { backgroundColor: Palette.lime, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
+  unlockBadgeText: { color: Palette.ink, fontSize: 13, fontWeight: '900' },
+  unlockGlyph: { width: 72, height: 72, borderRadius: 25, backgroundColor: Palette.lime, alignItems: 'center', justifyContent: 'center', marginTop: 23, borderWidth: 5, borderColor: '#B9E95C', shadowColor: Palette.lime, shadowOpacity: .42, shadowRadius: 22 },
+  unlockGlyphText: { color: Palette.ink, fontSize: 34, fontWeight: '900' },
+  unlockTitle: { color: '#ADD0BD', fontSize: 11, fontWeight: '900', letterSpacing: .7, textTransform: 'uppercase', marginTop: 15 },
+  unlockReward: { color: Palette.paper, fontSize: 29, lineHeight: 34, fontWeight: '900', letterSpacing: -.9, textAlign: 'center', marginTop: 5 },
+  unlockPoints: { color: Palette.lime, fontSize: 12, fontWeight: '900', marginTop: 8, marginBottom: 20 },
+  unlockProgress: { width: '100%' },
+  unlockButton: { width: '100%', marginTop: 24, minHeight: 54 },
   personalStrip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Palette.paper, borderLeftWidth: 4, borderLeftColor: Palette.mintDark, paddingHorizontal: 18, paddingVertical: 17, shadowColor: Palette.shadow, shadowOpacity: .05, shadowRadius: 14 },
   personalStripCompact: { flexWrap: 'wrap' },
   personalIntro: { flex: 1.3, minWidth: 110 },

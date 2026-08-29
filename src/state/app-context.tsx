@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { supabase } from '@/lib/supabase';
 
@@ -108,6 +108,7 @@ interface AppContextValue {
   profile: MvpProfile | null;
   role: MvpRole | null;
   studentHome: StudentHomeData | null;
+  studentPointGain: number | null;
   adminSummary: AdminSummary | null;
   adminStudents: AdminStudent[];
   adminRewards: MvpReward[];
@@ -115,7 +116,7 @@ interface AppContextValue {
   error: string | null;
   signIn: (email: string, password: string) => Promise<string | null>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: (silent?: boolean) => Promise<void>;
   setAdminSection: (section: AdminSection) => void;
   redeemReward: (rewardId: string) => Promise<ActionResult>;
   simulateElectricity: (studentId: string, kwh: number) => Promise<ActionResult<SimulationResult>>;
@@ -168,28 +169,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<MvpProfile | null>(null);
   const [studentHome, setStudentHome] = useState<StudentHomeData | null>(null);
+  const [studentPointGain, setStudentPointGain] = useState<number | null>(null);
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [adminStudents, setAdminStudents] = useState<AdminStudent[]>([]);
   const [adminRewards, setAdminRewards] = useState<MvpReward[]>([]);
   const [adminSection, setAdminSection] = useState<AdminSection>('dashboard');
   const [error, setError] = useState<string | null>(null);
+  const previousStudentPoints = useRef<number | null>(null);
+  const pointGainTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearAppData = useCallback(() => {
     setProfile(null);
     setStudentHome(null);
+    setStudentPointGain(null);
+    previousStudentPoints.current = null;
     setAdminSummary(null);
     setAdminStudents([]);
     setAdminRewards([]);
     setAdminSection('dashboard');
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
     if (!supabase) {
       setError('Supabase is not configured.');
       setReady(true);
       return;
     }
-    setLoading(true);
+    if (!silent) setLoading(true);
     const { data: sessionResult } = await supabase.auth.getSession();
     const currentSession = sessionResult.session;
     setSession(currentSession);
@@ -235,7 +241,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (homeResult.data) {
         const value = homeResult.data as Record<string, unknown>;
         const next = value.nextReward as Record<string, unknown> | null;
-        setStudentHome({
+        const nextStudentHome: StudentHomeData = {
           personalKwh: numberValue(value.personalKwh),
           personalPoints: numberValue(value.personalPoints),
           universityName: String(value.universityName ?? nextProfile.universityName),
@@ -253,7 +259,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             createdAt: item.created_at,
             kwhSaved: numberValue(item.kwh_saved),
           })),
-        });
+        };
+        const previousPoints = previousStudentPoints.current;
+        previousStudentPoints.current = nextStudentHome.universityPoints;
+        if (previousPoints !== null && nextStudentHome.universityPoints > previousPoints) {
+          setStudentPointGain(nextStudentHome.universityPoints - previousPoints);
+          if (pointGainTimer.current) clearTimeout(pointGainTimer.current);
+          pointGainTimer.current = setTimeout(() => setStudentPointGain(null), 2600);
+        }
+        setStudentHome(nextStudentHome);
       }
       setAdminSummary(null);
       setAdminStudents([]);
@@ -284,6 +298,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })));
       setAdminRewards(((rewardsResult.data as Record<string, unknown>[]) ?? []).map(mapReward));
       setStudentHome(null);
+      setStudentPointGain(null);
+      previousStudentPoints.current = null;
     }
     setLoading(false);
     setReady(true);
@@ -296,6 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const appState = AppState.addEventListener('change', (state) => { if (state === 'active') void refresh(); });
     return () => {
       clearTimeout(initialRefresh);
+      if (pointGainTimer.current) clearTimeout(pointGainTimer.current);
       listener.subscription.unsubscribe();
       appState.remove();
     };
@@ -386,10 +403,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const value = useMemo<AppContextValue>(() => ({
-    ready, loading, session, profile, role: profile?.role ?? null, studentHome, adminSummary, adminStudents,
+    ready, loading, session, profile, role: profile?.role ?? null, studentHome, studentPointGain, adminSummary, adminStudents,
     adminRewards, adminSection, error, signIn, logout, refresh, setAdminSection, redeemReward,
     simulateElectricity, createStudent, updateStudent, setStudentActive, saveReward,
-  }), [ready, loading, session, profile, studentHome, adminSummary, adminStudents, adminRewards, adminSection, error,
+  }), [ready, loading, session, profile, studentHome, studentPointGain, adminSummary, adminStudents, adminRewards, adminSection, error,
     signIn, logout, refresh, redeemReward, simulateElectricity, createStudent, updateStudent, setStudentActive, saveReward]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

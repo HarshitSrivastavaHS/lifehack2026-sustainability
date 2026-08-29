@@ -2,7 +2,7 @@
 
 ## Current objective
 
-Deliver a polished, mobile-first student experience for the existing hackathon MVP without changing its backend or product scope.
+Deliver a polished, mobile-first student experience and a judge-ready demo video for the existing hackathon MVP without changing its backend or product scope.
 
 ## Architecture and important decisions
 
@@ -27,6 +27,8 @@ Deliver a polished, mobile-first student experience for the existing hackathon M
 
 - MVP client: `src/app/index.tsx`, `src/state/app-context.tsx`, student/admin/auth screens, shared UI/theme, and `src/core/mvp/` rules/tests.
 - Final student polish: `src/features/student/student-app.tsx` and the student read mapping in `src/state/app-context.tsx`.
+- Demo-moment polish: the same two client files now add silent student refresh, point-gain feedback, and a milestone unlock takeover; no backend/admin files changed.
+- Demo assets: `artifacts/demo-video/CommonGrid-demo.mp4` and `CommonGrid-demo-cover.jpg`.
 - Backend: migrations `024`–`026`, `supabase/functions/manage-student/`, and function configuration.
 - Removed obsolete client feature modules and QR/camera/document dependencies/plugins.
 - Updated `README.md` and `docs/architecture.md` for the active MVP.
@@ -41,6 +43,10 @@ Deliver a polished, mobile-first student experience for the existing hackathon M
 - Hosted Supabase migrations `001`–`026` are synchronized and `manage-student` is deployed.
 - Student home is now a centered consumer feed with a dominant animated university milestone, supporting personal impact strip, real 14-day savings chart, next/almost/unlocked/redeemed reward treatments, and fast redemption feedback.
 - Compact phone layouts use reduced gutters, wrapped personal stats, thumb-friendly reward actions, and single-column progression hierarchy.
+- Student data silently refreshes every four seconds. A university point increase animates the counters and briefly shows the exact gain.
+- An unlocked reward now replaces the next-goal hero with a 100% milestone state and direct redeem action; after redemption, the next milestone resumes. Rewards stay above the supporting history chart.
+- The unlocked milestone progress track is explicitly full-width, verified from the rendered GUI.
+- A 47-second 1280×720 H.264 demo records the actual Expo GUI through student progress, admin 8 kWh simulation, 1,000-point unlock, redemption, and history, with animated transitions and concise captions. Network interception simulated only the recording mutation, so hosted demo data stayed at its checkpoint.
 
 ## Still pending
 
@@ -50,7 +56,7 @@ Deliver a polished, mobile-first student experience for the existing hackathon M
 
 - No confirmed application, schema, or demo-flow bug remains.
 - Local React Native DevTools cannot launch because the container lacks `libnspr4`; Metro and the app still run normally.
-- An attempted automated mobile screenshot renderer was also blocked by missing Chromium system libraries and unavailable root access. Narrow 320–390px layouts were reviewed and corrected from their explicit responsive styles; production rendering/build checks pass.
+- Chromium capture initially lacked system libraries; temporary user-space libraries and timed browser screencast frames produced the final GUI video without adding app dependencies. Temporary raw frames were moved out of the workspace after encoding.
 - The first hosted acceptance command used a copied student UUID and was rejected before mutation; rerunning with the Supabase Auth user ID passed.
 
 ## Commands and validation status
@@ -61,6 +67,8 @@ Validated on 2026-08-29:
 - `npm run lint` — pass.
 - `npx tsc --noEmit` — pass.
 - `npx expo export --platform web` — pass.
+- Final demo-moment pass — `npm test`, `npm run lint`, `npx tsc --noEmit`, `npx expo export --platform web`, and `git diff --check` all pass.
+- Video verification — 47.57 seconds, 1280×720, 30 fps, H.264/yuv420p MP4 with fast-start metadata; key unlock and redemption frames visually inspected.
 - Final student polish: hosted read confirms the chart receives Alice's real 12 kWh history and the reward checkpoint remains 920/1,000; tests, lint, TypeScript, web export, and `git diff --check` pass.
 - Expo web/Metro smoke test — HTTP 200, no bundle/runtime compile error.
 - `npx supabase db lint --linked` — pass, no schema errors.
@@ -71,4 +79,4 @@ Validated on 2026-08-29:
 
 ## Exact next recommended action
 
-Present the seeded 920 → 1,000 point demo and visually confirm the final motion timing on the target physical phone.
+Submit `artifacts/demo-video/CommonGrid-demo.mp4`; use its matching cover image as the submission thumbnail, then rehearse the same 920 → 1,000 flow live.
