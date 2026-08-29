@@ -37,6 +37,11 @@ export interface Redemption {
   status: 'redeemed';
 }
 
+export interface SavingsHistoryPoint {
+  createdAt: string;
+  kwhSaved: number;
+}
+
 export interface StudentHomeData {
   personalKwh: number;
   personalPoints: number;
@@ -46,6 +51,7 @@ export interface StudentHomeData {
   nextReward: Pick<MvpReward, 'id' | 'name' | 'description' | 'pointsRequired'> | null;
   rewards: MvpReward[];
   redemptions: Redemption[];
+  savingsHistory: SavingsHistoryPoint[];
 }
 
 export interface AdminSummary {
@@ -218,10 +224,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (nextProfile.role === 'student') {
-      const { data, error: homeError } = await supabase.rpc('get_mvp_student_home');
-      if (homeError) setError(homeError.message);
-      if (data) {
-        const value = data as Record<string, unknown>;
+      const historyStart = new Date();
+      historyStart.setDate(historyStart.getDate() - 14);
+      const [homeResult, historyResult] = await Promise.all([
+        supabase.rpc('get_mvp_student_home'),
+        supabase.from('mvp_electricity_savings').select('kwh_saved,created_at').gte('created_at', historyStart.toISOString()).order('created_at'),
+      ]);
+      if (homeResult.error) setError(homeResult.error.message);
+      if (historyResult.error) setError(historyResult.error.message);
+      if (homeResult.data) {
+        const value = homeResult.data as Record<string, unknown>;
         const next = value.nextReward as Record<string, unknown> | null;
         setStudentHome({
           personalKwh: numberValue(value.personalKwh),
@@ -237,6 +249,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } : null,
           rewards: ((value.rewards as Record<string, unknown>[]) ?? []).map(mapReward),
           redemptions: (value.redemptions as Redemption[]) ?? [],
+          savingsHistory: (historyResult.data ?? []).map((item) => ({
+            createdAt: item.created_at,
+            kwhSaved: numberValue(item.kwh_saved),
+          })),
         });
       }
       setAdminSummary(null);
